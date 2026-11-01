@@ -1,1 +1,12 @@
-
+# Gambas Project File 3.0
+Startup=FMain
+Version=0.0.4
+Component=gb.image
+Component=gb.gui
+Component=gb.form
+Component=gb.net
+Component=gb.net.curl
+Component=gb.util.web
+TabSize=2
+Language=fr
+Packager=1
