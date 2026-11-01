@@ -1,0 +1,64 @@
+' Gambas class file
+
+Private AdresseServeur As String
+
+Public Sub Timer1_Timer()
+
+  Dim client As HttpClient
+  Dim Reponse As String
+  Dim Data As Collection
+
+  client = New HttpClient
+  'client.URL = "http://172.25.0.2:8000/api/state"
+  client.URL = AdresseServeur
+  client.Async = False
+  client.Timeout = 40
+  client.Get()
+
+If client.Status < 0 Then
+    Print "Erreur"
+    Return
+  Else
+   ' Succès - données lues.
+    If Lof(client) Then Reponse = Read #client, Lof(client)
+    Print Reponse
+  End If
+
+  Data = JSON.Decode(Reponse)
+  
+  Latitude.Text = "Latitude : " & Data["lat"]
+  Longitude.Text = "Longitude : " & Data["long"]
+  Date.Text = "Date UTC : " & Data["jour"] & " : " & Data["mois"] & " : " & Data["annee"]
+  Heure.Text = "Heure UTC : " & Data["heure"] & " : " & Data["minute"] & " : " & Data["seconde"]
+  Satellites.Text = "Satellittes : " & Data["numsat"] 
+  Altitude.Text = "Altitude : " & Data["altitude"] 
+  Date_heure_FR.Text = "Date / heure (local) : " & Data["now_local"] 
+
+End
+
+
+
+Public Sub Form_Open()
+
+  Dim IP As String
+
+  Shell "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gambas-ventuno-q-gps-main-1" To IP
+
+  IP = Trim(IP)
+
+  If IP = "" Then
+    Message.Error("Impossible de récupérer l'adresse IP du conteneur.")
+    Return
+  Endif
+
+  AdresseServeur = "http://" & IP & ":8000/api/state"
+
+  Print "Serveur GPS : "; AdresseServeur
+
+End
+
+Public Sub Date_heure_FR_MouseDown()
+
+  
+
+End

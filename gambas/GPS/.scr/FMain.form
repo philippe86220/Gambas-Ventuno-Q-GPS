@@ -1,0 +1,33 @@
+# Gambas Form File 3.0
+
+{ Form Form
+  MoveScaled(0,0,54,40)
+  Background = Color.DarkGreen
+  Text = ("GPS  -  Philippe86220")
+  Centered = True
+  { Latitude Label
+    MoveScaled(12,8,32,3)
+  }
+  { Longitude Label
+    MoveScaled(12,13,32,3)
+  }
+  { Date Label
+    MoveScaled(12,19,32,3)
+  }
+  { Heure Label
+    MoveScaled(12,24,32,3)
+  }
+  { Satellites Label
+    MoveScaled(12,30,32,3)
+  }
+  { Altitude Label
+    MoveScaled(12,35,32,3)
+  }
+  { Date_heure_FR Label
+    MoveScaled(12,2,39,3)
+  }
+  { Timer1 #Timer
+    #MoveScaled(40,21)
+    Enabled = True
+  }
+}
