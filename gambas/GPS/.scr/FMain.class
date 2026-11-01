@@ -57,8 +57,3 @@ Public Sub Form_Open()
 
 End
 
-Public Sub Date_heure_FR_MouseDown()
-
-  
-
-End
