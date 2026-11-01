@@ -4,6 +4,8 @@ Application GPS pour **Arduino VENTUNO Q** : les données GPS reçues par le MCU
 
 Ce projet reprend le principe du projet [UNO-Q-GPS](https://github.com/philippe86220/UNO-Q-GPS), qui utilisait une interface **WebUI HTML** sur UNO Q. Ici, l'interface utilisateur est réalisée avec **Gambas3** sur VENTUNO Q, sans Brick WebUI.
 
+![Interface graphique Gambas3 – VENTUNO Q GPS](image/gambas-gps.png)
+
 ## Architecture
 
 ```text
