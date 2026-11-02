@@ -108,7 +108,7 @@ Après avoir identifié le conteneur actif, interroger Docker (en adaptant le no
 docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gambas-ventuno-q-gps-main-main-1
 ```
 
-Lors de l’un de nos derniers essais, la commande a renvoyé :
+Lors de l’un de mes derniers essais, la commande a renvoyé :
 
 ```text
 172.26.0.2
