@@ -98,6 +98,11 @@ For example, the command returned:
 ```text
 gambas-ventuno-q-gps-main-main-1
 ```
+To display the names and published ports of all running containers, use:
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Ports}}'
+```
 
 The `PORTS` column may be empty: **publishing a port to the host is not necessary for testing a direct connection to the container's IP address**, provided that this IP address is reachable from Ubuntu.
 
