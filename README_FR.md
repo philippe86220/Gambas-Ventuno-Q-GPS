@@ -114,7 +114,7 @@ Lors de l’un de mes derniers essais, la commande a renvoyé :
 172.26.0.2
 ```
 
-Cette adresse est **un exemple observé**, pas une valeur permanente. Au fil des essais, nous avons notamment rencontré `172.24.0.2`, `172.25.0.2` et `172.26.0.2`.
+Cette adresse est **un exemple observé**, pas une valeur permanente. Au fil des essais, j'ai notamment rencontré `172.24.0.2`, `172.25.0.2` et `172.26.0.2`.
 
 Le programme Gambas3 découvre automatiquement **le nom du conteneur actif, puis son adresse IP actuelle**.
 
