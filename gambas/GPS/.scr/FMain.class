@@ -17,7 +17,7 @@ Public Sub Timer1_Timer()
 
 If client.Status < 0 Then
     Print "Erreur"
-    Return
+    Quit 
   Else
    ' Succès - données lues.
     If Lof(client) Then Reponse = Read #client, Lof(client)
@@ -41,19 +41,33 @@ End
 Public Sub Form_Open()
 
   Dim IP As String
+  Dim conteneur As String
 
-  Shell "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gambas-ventuno-q-gps-main-1" To IP
+  ' Recherche du conteneur actif correspondant au service main
+  Shell "docker ps --filter 'name=gambas-ventuno-q-gps' --filter 'label=com.docker.compose.service=main' --format '{{.Names}}'" To conteneur
+
+  conteneur = Trim(conteneur)
+
+  If conteneur = "" Then
+    Message.Error("Aucun conteneur GPS principal actif.")
+    Quit  
+  Endif
+
+  ' Récupération de son adresse IP
+  Shell "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' " & Shell$(conteneur) To IP
 
   IP = Trim(IP)
 
   If IP = "" Then
     Message.Error("Impossible de récupérer l'adresse IP du conteneur.")
-    Return
+    Quit 
   Endif
 
   AdresseServeur = "http://" & IP & ":8000/api/state"
 
   Print "Serveur GPS : "; AdresseServeur
-
+  Timer1.Start
 End
+
+
 
