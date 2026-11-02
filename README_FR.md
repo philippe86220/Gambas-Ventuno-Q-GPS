@@ -58,7 +58,7 @@ Dans les propriétés du projet Gambas, vérifier que les composants **`gb.net.c
 
 Le projet Arduino App Lab s’appelle **`Gambas-Ventuno-Q-GPS`**.
 
-Le **nom complet du conteneur Docker peut changer**. Lors de nos essais, nous avons notamment observé :
+Le **nom complet du conteneur Docker peut changer**. Lors de mes essais, j'ai notamment observé :
 
 ```text
 gambas-ventuno-q-gps-main-1
