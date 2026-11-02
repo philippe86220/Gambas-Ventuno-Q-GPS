@@ -27,7 +27,6 @@
     MoveScaled(12,2,39,3)
   }
   { Timer1 #Timer
-    #MoveScaled(40,21)
-    Enabled = True
+    #MoveScaled(38,21)
   }
 }
