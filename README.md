@@ -56,46 +56,73 @@ sudo apt install gambas3-gb-net-curl gambas3-gb-util-web
 
 In the Gambas project properties, check that the **`gb.net.curl`** (HTTP client) and **`gb.util.web`** (JSON decoding) components are enabled. The exact names of available packages can be checked with `apt search gambas3`.
 
-## Application name
+## Application name and Docker container names
 
-The Arduino App Lab project is named **`Gambas-Ventuno-Q-GPS`**. Its associated Docker container is named **`gambas-ventuno-q-gps-main-1`**.
+The Arduino App Lab project is named **`Gambas-Ventuno-Q-GPS`**.
 
-## Starting the App Lab application
-
-Launch the GPS application in **Arduino App Lab** and wait for the `main` container to start.
-
-Check its name:
-
-```bash
-docker ps --format 'table {{.Names}}\t{{.Ports}}'
-```
-
-In the tested configuration, the container is named:
+**Do not assume that the full Docker container name is permanent.** During testing, App Lab created containers with different names:
 
 ```text
 gambas-ventuno-q-gps-main-1
+gambas-ventuno-q-gps-main-main-1
+```
+
+The old container remained present but was stopped, while the new container was running. Querying the stopped container returned an empty IP address.
+
+The Gambas application identifies the running GPS container using two Docker filters:
+
+- `name=gambas-ventuno-q-gps`: selects containers whose names match the application name.
+- `label=com.docker.compose.service=main`: restricts the results to containers belonging to the Docker Compose `main` service, excluding other services such as additional Bricks.
+
+Both filters are applied together.
+
+This avoids relying on a fixed, complete container name.
+
+**Note:** The current Gambas implementation assumes that exactly one running container matches both filters. This assumption was verified in the tested configuration.
+
+## Starting the App Lab application
+
+Launch the GPS application in **Arduino App Lab** and wait for its `main` container to start.
+
+Find the active `main` container:
+
+```bash
+docker ps \
+  --filter 'name=gambas-ventuno-q-gps' \
+  --filter 'label=com.docker.compose.service=main' \
+  --format '{{.Names}}'
+```
+
+For example, the command returned:
+
+```text
+gambas-ventuno-q-gps-main-main-1
 ```
 
 The `PORTS` column may be empty: **publishing a port to the host is not necessary for testing a direct connection to the container's IP address**, provided that this IP address is reachable from Ubuntu.
 
 ## Finding the container's IP address
 
+Once the active container has been identified, retrieve its IP address:
+
 ```bash
-docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gambas-ventuno-q-gps-main-1
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gambas-ventuno-q-gps-main-main-1
 ```
 
-On the tested configuration, this command returned:
+In the latest test, this returned:
 
 ```text
-172.25.0.2
+172.26.0.2
 ```
 
-This address is **an observed example**, not a permanent value. During testing, the container's address changed from `172.24.0.2` to `172.25.0.2`: automatic discovery avoids having to manually modify the Gambas code whenever it changes.
+Both the **container name** and its **IP address** may change when App Lab recreates the container. During testing, IP addresses included `172.24.0.2`, `172.25.0.2`, and `172.26.0.2`.
 
-Test the API from Ubuntu (adjust the address as needed):
+The Gambas program now discovers the running container and then retrieves its current IP address automatically.
+
+Test the API from Ubuntu (replace the example address with the current one):
 
 ```bash
-curl http://172.25.0.2:8000/api/state
+curl http://172.26.0.2:8000/api/state
 ```
 
 A JSON response should contain the latest known GPS data, for example:
@@ -142,95 +169,91 @@ The `api_state()` function calls `now_local_fr()` and adds `payload["now_local"]
 
 ## Gambas3 interface
 
-The Gambas form uses a `Timer` to periodically query the API, read the response, and display the values.
+The Gambas form uses `Timer1` to periodically query the API, decode the JSON response and display GPS values.
 
-Representative excerpt from the tested code:
+**Important: set the `Enabled` property of `Timer1` to `False` in the Gambas3 form editor.** The timer must not run before the application has identified the active container and constructed a valid server URL. It is started explicitly at the end of `Form_Open()`.
 
-```gambas
-Public Sub Timer1_Timer()
+### Discovering the active container and its IP address
 
-  Dim client As HttpClient
-  Dim Reponse As String
-  Dim Data As Collection
-
-  client = New HttpClient
-  client.URL = "http://172.25.0.2:8000/api/state"
-  client.Async = False
-  client.Timeout = 40
-  client.Get()
-
-If client.Status < 0 Then
-    Print "Erreur"
-    Return
-  Else
-   ' Succès - données lues.
-    If Lof(client) Then Reponse = Read #client, Lof(client)
-    Print Reponse
-  End If
-
-  Data = JSON.Decode(Reponse)
-
-  Latitude.Text = "Latitude : " & Data["lat"]
-  Longitude.Text = "Longitude : " & Data["long"]
-  Date.Text = "Date UTC : " & Data["jour"] & " : " & Data["mois"] & " : " & Data["annee"]
-  Heure.Text = "Heure UTC : " & Data["heure"] & " : " & Data["minute"] & " : " & Data["seconde"]
-  Satellites.Text = "Satellittes : " & Data["numsat"]
-  Altitude.Text = "Altitude : " & Data["altitude"]
-  Date_heure_FR.Text = "Date / heure (local) : " & Data["now_local"]
-
-End
-```
-
-This excerpt illustrates the first version with a fixed IP address. The next section shows how to replace it with an address automatically discovered using `Shell`. The date and time fields coming from the GPS are labeled UTC here.
-
-### Automatically discovering the IP address from Gambas3
-
-Gambas3 can execute a Linux command with `Shell` and capture its output in a variable using `To`. This makes it possible to find the IP address assigned by Docker **without hard-coding it**.
-
-In the Gambas form, declare a variable accessible to the other procedures:
+Declare the server address as a form-level variable:
 
 ```gambas
 Private AdresseServeur As String
+```
 
+The updated `Form_Open()` procedure performs two separate operations: it first identifies the running `main` container using **two filters**, then retrieves that container's IP address.
+
+```gambas
 Public Sub Form_Open()
 
   Dim IP As String
+  Dim conteneur As String
 
-  Shell "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gambas-ventuno-q-gps-main-1" To IP
+  ' Find the running container for this application and the main service
+  Shell "docker ps --filter 'name=gambas-ventuno-q-gps' --filter 'label=com.docker.compose.service=main' --format '{{.Names}}'" To conteneur
+  conteneur = Trim(conteneur)
+
+  If conteneur = "" Then
+    Message.Error("Aucun conteneur GPS principal actif.")
+    Quit
+  Endif
+
+  ' Retrieve the current IP address of that container
+  Shell "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' " & Shell$(conteneur) To IP
   IP = Trim(IP)
 
   If IP = "" Then
-    Message.Error("Conteneur introuvable ou sans adresse IP.   Démarrez d'abord l'application App Lab.")
-    Return
+    Message.Error("Impossible de récupérer l'adresse IP du conteneur.")
+    Quit
   Endif
 
   AdresseServeur = "http://" & IP & ":8000/api/state"
   Print "Serveur GPS : "; AdresseServeur
 
+  ' Start the timer only after successful initialization
+  Timer1.Start
+
 End
 ```
 
-In `Timer1_Timer()`, replace the fixed address:
+The two filters prevent an additional Brick container from being selected instead of the `main` service. `Shell$(conteneur)` quotes the retrieved container name for use in the shell command.
+
+The code assumes that exactly one running container matches both filters. If none is found, or if its IP address is empty, the application displays an error and exits **without starting the timer**. If several containers match, additional selection logic would be needed.
+
+### Periodic HTTP requests
+
+In `Timer1_Timer()`, use the address initialized by `Form_Open()` instead of a hard-coded IP:
 
 ```gambas
-client.URL = "http://172.25.0.2:8000/api/state"
-```
-
-with:
-
-```gambas
-If AdresseServeur = "" Then Return
+client = New HttpClient
 client.URL = AdresseServeur
+client.Async = False
+client.Timeout = 40
+client.Get()
+
+If client.Status < 0 Then
+  Print "Erreur"
+  Quit
+Endif
+
+If Lof(client) Then Reponse = Read #client, Lof(client)
+Data = JSON.Decode(Reponse)
 ```
 
-**Requirements and limitations:** the App Lab application must be started before Gambas3; the Ubuntu user must be able to run `docker inspect` without a permission error. If the container is recreated **while** Gambas is running, the address must be discovered again. For a more robust program, also handle command errors and containers with multiple network interfaces.
+The rest of the procedure displays `Data["lat"]`, `Data["long"]`, the UTC date and time, satellite count, altitude, and `Data["now_local"]` in the corresponding labels.
 
-This technique can be reused for other Linux commands: `Shell "uname -r" To Resultat`, for example, retrieves the kernel version into a Gambas variable.
+**Timer initialization and error handling:** the timer remains disabled in the form editor and is started only when `AdresseServeur` has been initialized. In the tested code, an HTTP client error also exits the application, rather than repeatedly printing errors on subsequent timer events.
+
+**Requirements and limitations:** start the App Lab application before Gambas3. The Ubuntu user must be able to run `docker ps` and `docker inspect` without a permission error. This implementation discovers the address only when Gambas3 starts. **For example, if you stop the GPS application in Arduino App Lab and then start it again while leaving the Gambas3 window open**, App Lab may recreate the container with a different IP address. Gambas3 will still use the old address; in the current version, an HTTP connection error causes Gambas3 to exit. Once the App Lab application is running again, restart Gambas3 so that it can discover the new container and IP address. Automatic reconnection is not implemented. The IP extraction also assumes one suitable Docker network address.
+
+This technique can be reused for other Linux commands: for example, `Shell "uname -r" To Resultat` retrieves the kernel version into a Gambas variable.
 
 ### Possible improvements
 
-- Check the HTTP response status code, the presence of a JSON response body, and decoding errors.
-- Avoid a synchronous request in the `Timer` if response delays could freeze the graphical interface; use an asynchronous request instead.
+- Check the HTTP response status code, the presence of a JSON response body, and JSON decoding errors.
+- Handle Docker command failures and multiple matching containers or network interfaces explicitly.
+- Rediscover the active container automatically if it changes while Gambas3 is running.
+- Avoid a synchronous request in the timer if response delays could freeze the graphical interface; use an asynchronous request instead.
 - Provide a clear message when the GPS has not yet obtained a position (`null`).
 
 ## Why this approach?
