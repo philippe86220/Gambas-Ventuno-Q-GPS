@@ -69,12 +69,16 @@ gambas-ventuno-q-gps-main-main-1
 
 The old container remained present but was stopped, while the new container was running. Querying the stopped container returned an empty IP address.
 
-The Gambas application therefore identifies the **running** container using two Docker filters:
+The Gambas application identifies the running GPS container using two Docker filters:
 
-- `name=gambas-ventuno-q-gps`: matches the application's name.
-- `label=com.docker.compose.service=main`: selects the Compose `main` service rather than an additional Brick.
+- `name=gambas-ventuno-q-gps`: selects containers whose names match the application name.
+- `label=com.docker.compose.service=main`: restricts the results to containers belonging to the Docker Compose `main` service, excluding other services such as additional Bricks.
 
-This avoids depending on the full container name or assuming that the first matching container belongs to the `main` service.
+Both filters are applied together.
+
+This avoids relying on a fixed, complete container name.
+
+**Note:** The current Gambas implementation assumes that exactly one running container matches both filters. This assumption was verified in the tested configuration.
 
 ## Starting the App Lab application
 
