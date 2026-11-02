@@ -142,8 +142,6 @@ Une réponse JSON doit contenir les dernières données GPS connues, par exemple
 }
 ```
 
-Les valeurs sont illustratives. La version actuelle de `main.py` renvoie bien le champ `now_local` (et non `now_utc`).
-
 ## Serveur HTTP dans `main.py`
 
 Le programme Python conserve les données GPS dans un dictionnaire `_state`. La fonction `update_gps(...)`, exposée via `Bridge.provide(...)`, actualise ce dictionnaire à chaque transmission du MCU. Un verrou `threading.Lock()` protège les accès concurrents.
