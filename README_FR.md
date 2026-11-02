@@ -164,8 +164,7 @@ def now_local_fr():
     return datetime.datetime.now(ZoneInfo('Europe/Paris')).strftime('%d/%m/%Y %H:%M:%S')
 ```
 
-La fonction `api_state()` appelle effectivement `now_local_fr()` et ajoute `payload["now_local"]` à la réponse. Ce point a été vérifié dans le `main.py` complet. Le code intégral reste disponible dans les fichiers source du projet.
-
+La fonction `api_state()` appelle effectivement `now_local_fr()` et ajoute `payload["now_local"]` à la réponse.
 ## Interface Gambas3
 
 Le formulaire Gambas utilise `Timer1` pour interroger périodiquement l’API, lire la réponse JSON et afficher les valeurs.
