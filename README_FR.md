@@ -4,6 +4,8 @@ Application GPS pour **Arduino VENTUNO Q** : les données GPS reçues par le MCU
 
 Ce projet reprend le principe du projet [UNO-Q-GPS](https://github.com/philippe86220/UNO-Q-GPS), qui utilisait une interface **WebUI HTML** sur UNO Q. Ici, l'interface utilisateur est réalisée avec **Gambas3** sur VENTUNO Q, sans Brick WebUI.
 
+![Interface graphique Gambas3 – GPS VENTUNO Q](image/gambas-gps.png)
+
 ## Architecture
 
 ```text
@@ -17,7 +19,8 @@ Arduino App Lab / conteneur main
   ├── dictionnaire Python _state (protégé par un Lock)
   └── serveur HTTP : 0.0.0.0:8000
                          │
-                         │ GET /api/state → JSON
+                         │ Port Docker publié : 8000
+                         │ GET http://localhost:8000/api/state → JSON
                          ▼
 Ubuntu (hôte VENTUNO Q)
   Application Gambas3
@@ -28,7 +31,7 @@ Ubuntu (hôte VENTUNO Q)
 
 Le serveur HTTP ne donne pas directement accès aux variables Python : il **renvoie une représentation JSON** des valeurs sélectionnées lors de chaque requête. Les données restent en mémoire dans le processus Python ; aucun fichier `.json` sur disque n'est nécessaire.
 
-> **Important :** la connexion directe depuis Ubuntu à l'adresse IP privée du conteneur a été testée sur cette VENTUNO Q. Elle dépend de la configuration réseau Docker de l'hôte et ne constitue pas une adresse stable garantie pour toutes les installations.
+> **Important :** le port **8000** est déclaré dans `app.yaml`. Arduino App CLI utilise cette déclaration pour générer la correspondance des ports dans Docker Compose. Gambas3 peut ainsi se connecter à `http://localhost:8000/api/state` sans rechercher l'adresse IP du conteneur.
 
 ## Prérequis
 
@@ -54,93 +57,67 @@ sudo apt install gambas3-gb-net-curl gambas3-gb-util-web
 
 Dans les propriétés du projet Gambas, vérifier que les composants **`gb.net.curl`** (client HTTP) et **`gb.util.web`** (décodage JSON) sont activés. Les noms exacts des paquets disponibles peuvent être vérifiés avec `apt search gambas3`.
 
-## Nom de l’application et des conteneurs Docker
+## Publier le port du serveur HTTP
 
-Le projet Arduino App Lab s’appelle **`Gambas-Ventuno-Q-GPS`**.
+Dans le fichier `app.yaml` du projet App Lab, déclarer le port utilisé par le serveur HTTP Python :
 
-Le **nom complet du conteneur Docker peut changer**. Lors de mes essais, j'ai notamment observé :
-
-```text
-gambas-ventuno-q-gps-main-1
-gambas-ventuno-q-gps-main-main-1
+```yaml
+ports:
+  - 8000
 ```
 
-L’ancien conteneur était arrêté tandis que le nouveau était actif. Interroger l’ancien conteneur avec `docker inspect` renvoyait une adresse IP vide.
+Si le fichier contient `ports: []`, remplacer cette ligne par la configuration ci-dessus. Arduino App Lab considère `app.yaml` comme un fichier en lecture seule dans son éditeur, mais il est possible de le modifier depuis un éditeur externe, par exemple `nano` dans un terminal. Enregistrer la modification, puis relancer l'application App Lab pour que la configuration Docker Compose générée et le conteneur en cours d'exécution prennent en compte la publication du port.
 
-L’application Gambas3 identifie donc le conteneur **en cours d’exécution** au moyen de deux filtres Docker :
+Arduino App CLI génère alors un fichier `.cache/app-compose.yaml` contenant une configuration équivalente à :
 
-- `name=gambas-ventuno-q-gps` : sélectionne les conteneurs dont le nom correspond au motif du projet.
-- `label=com.docker.compose.service=main` : limite les résultats au service Docker Compose `main`, en excluant les autres services, notamment les éventuelles Bricks.
+```yaml
+ports:
+  - mode: ingress
+    target: 8000
+    published: "8000"
+    protocol: tcp
+```
 
-Les deux filtres sont appliqués simultanément. Cela évite de dépendre d’un nom de conteneur complet et fixe.
+**Modifier `app.yaml`, et non le fichier généré `.cache/app-compose.yaml`.** Ce dernier peut être recréé automatiquement par App CLI.
 
-**Limite :** le code Gambas actuel suppose qu’un seul conteneur actif correspond aux deux filtres. Cette hypothèse était vérifiée dans la configuration testée.
+Le port 8000 doit être disponible sur l'hôte Ubuntu. Selon la configuration réseau et le pare-feu, un port publié par Docker peut être accessible depuis d'autres interfaces réseau que `localhost` : cette publication ne garantit donc pas, à elle seule, un accès exclusivement local.
 
-## Démarrer l'application App Lab
+## Démarrer et tester l'application App Lab
 
-Lancer l’application GPS dans **Arduino App Lab** et attendre le démarrage du conteneur `main`.
-
-Pour identifier le conteneur actif :
+Lancer l'application GPS dans **Arduino App Lab** et attendre le démarrage du conteneur `main`. Depuis un terminal Ubuntu sur la VENTUNO Q, tester :
 
 ```bash
-docker ps --filter 'name=gambas-ventuno-q-gps' --filter 'label=com.docker.compose.service=main' --format '{{.Names}}'
-```
-
-Lors d’un essai, la commande a renvoyé :
-
-```text
-gambas-ventuno-q-gps-main-main-1
-```
-
-Pour examiner également les ports :
-
-```bash
-docker ps --format 'table {{.Names}}\t{{.Ports}}'
-```
-
-La colonne `PORTS` peut être vide : **aucune publication de port vers l’hôte n’est nécessaire pour le test de connexion directe à l’IP du conteneur**, dès lors que cette IP est joignable depuis Ubuntu.
-
-## Trouver l'adresse IP du conteneur
-
-Après avoir identifié le conteneur actif, interroger Docker (en adaptant le nom au résultat précédent) :
-
-```bash
-docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gambas-ventuno-q-gps-main-main-1
-```
-
-Lors de l’un de mes derniers essais, la commande a renvoyé :
-
-```text
-172.26.0.2
-```
-
-Cette adresse est **un exemple observé**, pas une valeur permanente. Au fil des essais, j'ai notamment rencontré `172.24.0.2`, `172.25.0.2` et `172.26.0.2`.
-
-Le programme Gambas3 découvre automatiquement **le nom du conteneur actif, puis son adresse IP actuelle**.
-
-Tester l’API depuis Ubuntu (adapter l’adresse obtenue) :
-
-```bash
-curl http://172.26.0.2:8000/api/state
+curl http://localhost:8000/api/state
 ```
 
 Une réponse JSON doit contenir les dernières données GPS connues, par exemple :
 
 ```json
 {
-  "lat": 46.91597,
-  "long": 0.5920883333333333,
-  "jour": 31,
-  "mois": 10,
+  "lat": 46.915963166666664,
+  "long": 0.5920348333333333,
+  "jour": 4,
+  "mois": 11,
   "annee": 2026,
-  "heure": 12,
-  "minute": 43,
-  "seconde": 49,
-  "numsat": 6,
-  "altitude": 46.9,
-  "now_local": "31/10/2026 13:43:49"
+  "heure": 7,
+  "minute": 44,
+  "seconde": 3,
+  "numsat": 7,
+  "altitude": 53.3,
+  "now_local": "04/11/2026 08:44:03"
 }
 ```
+
+Il n'est **plus nécessaire d'exécuter `docker inspect` ni de rechercher l'adresse IP du conteneur**. Le port publié sur l'hôte reste identique même si Docker attribue une autre adresse IP privée au conteneur.
+
+## Pourquoi certains noms de conteneurs comportent-ils deux `main` ?
+
+Le nom d'un conteneur Docker Compose est construit à partir du **nom du projet Compose**, du **nom du service** et d'un numéro d'instance.
+
+- Une application développée localement, avec l'identifiant `gambas-ventuno-q-gps` et le service `main`, peut produire le nom `gambas-ventuno-q-gps-main-1`.
+- La fonction **Download ZIP** de GitHub, utilisée sur la branche par défaut `main`, produit une archive telle que `Gambas-Ventuno-Q-GPS-main.zip`, contenant un dossier racine portant le même suffixe `-main`. L'importation de ce dossier dans App Lab entraîne l'identifiant `gambas-ventuno-q-gps-main`. Avec le service `main`, le conteneur peut alors être nommé `gambas-ventuno-q-gps-main-main-1`.
+
+Dans ce second exemple, le premier `main` provient du nom de la branche Git repris dans le nom du dossier importé ; le second correspond au service Docker Compose. **Gambas3 n'a plus besoin de connaître ces noms** puisque le port du serveur est publié.
 
 ## Serveur HTTP dans `main.py`
 
@@ -154,7 +131,7 @@ GET /api/state
 
 Il sérialise l'état courant avec `json.dumps(...)`, en définissant le type de contenu `application/json`.
 
-Le code fournit également l’heure locale française grâce à :
+Le code fournit également l'heure locale française grâce à :
 
 ```python
 import datetime
@@ -164,71 +141,21 @@ def now_local_fr():
     return datetime.datetime.now(ZoneInfo('Europe/Paris')).strftime('%d/%m/%Y %H:%M:%S')
 ```
 
-La fonction `api_state()` appelle effectivement `now_local_fr()` et ajoute `payload["now_local"]` à la réponse.
+La fonction `api_state()` appelle `now_local_fr()` et ajoute `payload["now_local"]` à la réponse. Le code complet figure dans les fichiers sources du projet.
+
 ## Interface Gambas3
 
-Le formulaire Gambas utilise `Timer1` pour interroger périodiquement l’API, lire la réponse JSON et afficher les valeurs.
-
-### Initialisation du Timer
-
-**Important : dans l’éditeur de formulaire Gambas3, régler la propriété `Enabled` de `Timer1` sur `False`.**
-
-Le Timer ne doit pas se déclencher avant que le programme ait trouvé le conteneur et construit l’adresse du serveur. Il est démarré explicitement par `Timer1.Start`, à la fin de `Form_Open()`, uniquement si l’initialisation a réussi.
-
-Cette propriété se règle dans l’éditeur Gambas3 ; il n’est pas nécessaire de modifier manuellement `FMain.form`.
-
-### Découverte automatique du conteneur et de son adresse IP
-
-Gambas3 peut exécuter une commande Linux avec `Shell` et récupérer sa sortie dans une variable grâce à `To`. Deux commandes sont utilisées : `docker ps` identifie le conteneur actif, puis `docker inspect` récupère son adresse IP.
-
-Dans `FMain.class`, déclarer une variable accessible aux différentes procédures :
+Le formulaire Gambas utilise `Timer1` pour interroger périodiquement l'API HTTP, décoder la réponse JSON et afficher les valeurs GPS. Puisque le port HTTP est publié sur l'hôte Ubuntu, l'adresse peut être fixe :
 
 ```gambas
-Private AdresseServeur As String
+client.URL = "http://localhost:8000/api/state"
 ```
 
-La procédure d’initialisation est :
+Il n'est plus nécessaire de rechercher le conteneur Docker ni son adresse IP. Voici les procédures correspondantes du programme Gambas3 testé :
 
 ```gambas
-Public Sub Form_Open()
+' Gambas class file
 
-  Dim IP As String
-  Dim conteneur As String
-
-  ' Recherche du conteneur actif correspondant au service main
-  Shell "docker ps --filter 'name=gambas-ventuno-q-gps' --filter 'label=com.docker.compose.service=main' --format '{{.Names}}'" To conteneur
-  conteneur = Trim(conteneur)
-
-  If conteneur = "" Then
-    Message.Error("Aucun conteneur GPS principal actif.")
-    Quit
-  Endif
-
-  ' Récupération de son adresse IP
-  Shell "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' " & Shell$(conteneur) To IP
-  IP = Trim(IP)
-
-  If IP = "" Then
-    Message.Error("Impossible de récupérer l'adresse IP du conteneur.")
-    Quit
-  Endif
-
-  AdresseServeur = "http://" & IP & ":8000/api/state"
-  Print "Serveur GPS : "; AdresseServeur
-  Timer1.Start
-
-End
-```
-
-Les deux filtres évitent de dépendre du nom complet du conteneur et limitent la recherche au service `main`, plutôt qu’à une éventuelle Brick. `Shell$(conteneur)` permet de transmettre le nom à la commande shell en le protégeant correctement.
-
-Si aucun conteneur actif n’est trouvé ou si son adresse IP est vide, Gambas3 affiche un message d’erreur et quitte l’application **sans démarrer le Timer**.
-
-### Lecture périodique des données GPS
-
-Dans `Timer1_Timer()`, l’adresse du serveur n’est plus codée en dur : elle provient de `Form_Open()`.
-
-```gambas
 Public Sub Timer1_Timer()
 
   Dim client As HttpClient
@@ -236,7 +163,7 @@ Public Sub Timer1_Timer()
   Dim Data As Collection
 
   client = New HttpClient
-  client.URL = AdresseServeur
+  client.URL = "http://localhost:8000/api/state"
   client.Async = False
   client.Timeout = 40
   client.Get()
@@ -245,6 +172,7 @@ Public Sub Timer1_Timer()
     Print "Erreur"
     Quit
   Else
+    ' Succès : lecture du corps de la réponse.
     If Lof(client) Then Reponse = Read #client, Lof(client)
     Print Reponse
   Endif
@@ -255,36 +183,26 @@ Public Sub Timer1_Timer()
   Longitude.Text = "Longitude : " & Data["long"]
   Date.Text = "Date UTC : " & Data["jour"] & " : " & Data["mois"] & " : " & Data["annee"]
   Heure.Text = "Heure UTC : " & Data["heure"] & " : " & Data["minute"] & " : " & Data["seconde"]
-  Satellites.Text = "Satellittes : " & Data["numsat"]
+  Satellites.Text = "Satellites : " & Data["numsat"]
   Altitude.Text = "Altitude : " & Data["altitude"]
   Date_heure_FR.Text = "Date / heure (local) : " & Data["now_local"]
 
 End
+
+Public Sub Form_Open()
+  Timer1.Start
+End
 ```
 
-Les champs de date et d’heure issus du GPS sont ici étiquetés UTC. Le champ `now_local` est fourni par le serveur Python en heure locale française.
+**Démarrer l'application App Lab avant Gambas3.** Le serveur Python et le programme Gambas3 doivent fonctionner sur la VENTUNO Q. L'intervalle de `Timer1` se règle dans l'éditeur de formulaire ; le Timer est démarré dans `Form_Open()`.
 
 ### Conditions et limites
 
-L’application GPS doit être démarrée dans App Lab **avant** Gambas3. L’utilisateur Ubuntu doit avoir les permissions nécessaires pour exécuter `docker ps` et `docker inspect`.
-
-**Exemple concret :** si vous cliquez sur **Stop** dans Arduino App Lab, puis sur **Run** pour relancer l’application GPS **en laissant la fenêtre Gambas3 ouverte**, App Lab peut recréer le conteneur et lui attribuer une nouvelle adresse IP.
-
-Gambas3 continue alors d’utiliser l’adresse mémorisée lors de son ouverture. Dans la version actuelle, si la requête HTTP échoue et que le client signale une erreur, Gambas3 se ferme. Une fois l’application GPS relancée dans App Lab, **il suffit de redémarrer Gambas3** pour découvrir le conteneur actif et sa nouvelle adresse IP.
-
-La reconnexion automatique n’est pas encore implémentée. Ce scénario ne signifie pas qu’App Lab recrée spontanément les conteneurs pendant leur fonctionnement normal.
-
-Le code actuel suppose également qu’un seul conteneur actif correspond aux deux filtres et qu’une adresse IP exploitable est renvoyée par `docker inspect`.
-
-Cette technique peut servir à d’autres commandes Linux : `Shell "uname -r" To Resultat`, par exemple, récupère la version du noyau dans une variable Gambas.
-
-### Améliorations possibles
-
-- Vérifier le code HTTP de réponse, la présence d’un corps JSON et les erreurs de décodage.
-- Gérer explicitement les erreurs de commande Docker, plusieurs conteneurs correspondants ou plusieurs interfaces réseau.
-- Retrouver automatiquement le conteneur si App Lab est arrêté puis relancé alors que Gambas3 est ouvert.
-- Éviter une requête synchrone dans le `Timer` si le délai de réponse peut bloquer l’interface graphique ; prévoir une requête asynchrone.
-- Prévoir un message clair lorsque le GPS n’a pas encore de position (`null`).
+- L'exemple utilise des requêtes HTTP synchrones (`client.Async = False`), qui peuvent bloquer brièvement l'interface si le serveur tarde à répondre.
+- Le programme détecte un état négatif du client, mais ne vérifie pas séparément le code de réponse HTTP et ne gère pas les réponses JSON vides ou mal formées.
+- En cas d'erreur de connexion, le programme quitte ; la reconnexion automatique n'est pas implémentée.
+- Si App Lab recrée le conteneur, l'adresse publiée reste `localhost:8000` dès que le service est de nouveau opérationnel. Gambas3 ne dépend plus du nom du conteneur ni de son adresse IP privée.
+- Si le GPS n'a pas encore obtenu de position, certaines valeurs peuvent être indisponibles ou `null` ; l'affichage pourrait être amélioré pour traiter explicitement ce cas.
 
 ## Pourquoi cette approche ?
 
@@ -297,6 +215,12 @@ La même architecture peut être réemployée pour d'autres données : capteurs,
 ## Projet d'origine
 
 - [UNO-Q-GPS — projet GPS pour Arduino UNO Q avec interface WebUI HTML](https://github.com/philippe86220/UNO-Q-GPS)
+
+### Remerciements
+
+Ce projet a été développé avec l'aide de **ChatGPT (OpenAI)**, notamment pour explorer l'architecture de communication entre Arduino App Lab et Gambas3, mettre en place le serveur HTTP Python, analyser le code et rédiger la documentation.
+
+Les différentes solutions ont été expérimentées, testées et validées sur une Arduino VENTUNO Q. Merci également à **ptillisch**, sur le forum Arduino, pour ses explications sur la déclaration du port dans `app.yaml` et l'origine des noms des conteneurs Docker Compose.
 
 ---
 
