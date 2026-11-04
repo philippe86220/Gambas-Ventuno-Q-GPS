@@ -1,5 +1,6 @@
 name: Gambas-Ventuno-Q-GPS
 description: Example application demonstrating how to read GNSS NMEA frames on the Arduino UNO-Q, process them on the MCU using a lightweight C++ parser, transmit
-ports: []
+ports:
+  - 8000
 bricks: []
 icon: 🛰️
